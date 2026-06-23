@@ -1,0 +1,60 @@
+8192
+mem alloc and copy, cycles
+1712
+load to vector reg, cycles
+6443
+vector computations, cycles
+1987
+performance, OP/1000 cycles
+1943
+utilization, %o
+121
+
+4096
+mem alloc and copy, cycles
+1160
+load to vector reg, cycles
+4600
+vector computations, cycles
+1435
+performance, OP/1000 cycles
+1357
+utilization, %o
+84
+
+
+2048
+mem alloc and copy, cycles
+905
+load to vector reg, cycles
+3678
+vector computations, cycles
+1180
+performance, OP/1000 cycles
+843
+utilization, %o
+52
+
+128
+mem alloc and copy, cycles
+667
+load to vector reg, cycles
+2865
+vector computations, cycles
+919
+performance, OP/1000 cycles
+67
+utilization, %o
+4
+
+8
+mem alloc and copy, cycles
+652
+load to vector reg, cycles
+2862
+vector computations, cycles
+868
+performance, OP/1000 cycles
+4
+utilization, %o
+0

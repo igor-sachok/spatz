@@ -89,6 +89,7 @@ if (ELEN EQUAL 64)
   add_library(dp-fconv2d dp-fconv2d/kernel/fconv2d.c)
 
   add_library(dp-fft dp-fft/kernel/fft.c)
+  add_library(srs-prod srs-prod/kernel/prod.c)
 endif()
 
 add_library(sp-fmatmul sp-fmatmul/kernel/sp-fmatmul.c)
@@ -122,6 +123,10 @@ if (ELEN EQUAL 64)
   add_spatz_test_threeParam(dp-fconv2d dp-fconv2d/main.c 64 64 7)
 
   add_spatz_test_twoParam(dp-fft dp-fft/main.c 128 2)
+  add_spatz_test_oneParam(srs-prod srs-prod/main.c 128)
+  add_spatz_test_oneParam(srs-prod srs-prod/main.c 8)
+  add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 128)
+  add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 8)
 
 endif()
 
