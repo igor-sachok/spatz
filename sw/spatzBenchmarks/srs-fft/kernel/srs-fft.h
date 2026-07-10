@@ -1,4 +1,4 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2021 ETH Zurich and University of Bologna.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,12 +14,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
+// Author: Matteo Perotti, ETH Zurich
 
-#ifndef _FDOTPROD_H_
-#define _FDOTPROD_H_
+#include <stdint.h>
+#include <string.h>
 
-inline void precoding_v32b(float *input_re_in_dram, float *port_weights_in_dram, float *port_re)
+#ifndef _FFT_H_
+#define _FFT_H_
+
+// Single-core
+inline void fft_sc(float *s, float *buf, const float *twi,
+                   const uint16_t *seq_idx, const uint16_t *rev_idx,
+                   const unsigned int nfft, const unsigned int log2_nfft,
+                   const unsigned int cid) __attribute__((always_inline));
+
+// Dual-core
+inline void fft_2c(const float *s, float *buf, const float *twi,
+                   const unsigned int nfft, const unsigned int cid)
     __attribute__((always_inline));
 
 #endif

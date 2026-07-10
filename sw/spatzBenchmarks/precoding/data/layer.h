@@ -148,3 +148,8 @@ typedef struct dotp_layer_struct {
 
   precision_t dtype;
 } dotp_layer;
+
+typedef struct precoding_layer_struct {
+  uint32_t M;
+  precision_t dtype;
+} precoding_layer;

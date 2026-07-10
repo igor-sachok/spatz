@@ -2,11 +2,11 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Parameters for a DOTP
+// Parameters for HARD_DECISION
 
 {
-    kernel: "DOTP"
-    M: 8,
-    prec: 32,
-    expand: 0
+    kernel: "HARD_DECISION"
+    lifting_size: 200,
+    num_cores: 2,
+    zero_prob: 0
 }

@@ -38,26 +38,37 @@ static inline float bf16_to_f32(uint16_t x) {
 
 
 static inline int fp_check(uint16_t *port_re, const int8_t *a, const float *b) {
-    const float threshold = 0.001f;
-    for (int i = 0; i < dotp_l.M; i += 2) {
-        float gold_re = 0.0f;
-        float gold_im = 0.0f;
-        for (int l = 0; l < nof_layers; l++) {
-            float in_re = (float)a[l * dotp_l.M + i];
-            float in_im = (float)a[l * dotp_l.M + i + 1];
-            float w_re  = b[l * 2];
-            float w_im  = b[l * 2 + 1];
-            gold_re += in_re * w_re - in_im * w_im;
-            gold_im += in_re * w_im + in_im * w_re;
+    const float threshold = 0.01f;
+    unsigned nof_re = dotp_l.M / 2; // dotp_l.M = int8 samples per port (re+im), no layer factor
+
+    for (int i_port = 0; i_port < nof_ports; i_port++) {
+        for (int i_re = 0; i_re < nof_re; i_re++) {
+            float gold_re = 0.0f;
+            float gold_im = 0.0f;
+
+            for (int l = 0; l < nof_layers; l++) {
+                // layout: [RE][layer][re, im], stride nof_layers*2 per RE
+                int base = i_re * nof_layers * 2 + l * 2;
+                float in_re = (float)a[base];
+                float in_im = (float)a[base + 1];
+
+                // weights: [port][layer][re, im]
+                float w_re = b[i_port * nof_layers * 2 + l * 2];
+                float w_im = b[i_port * nof_layers * 2 + l * 2 + 1];
+
+                gold_re += in_re * w_re - in_im * w_im;
+                gold_im += in_re * w_im + in_im * w_re;
+            }
+
+            int out_idx = i_port * dotp_l.M + i_re * 2;
+            float got_re = bf16_to_f32(port_re[out_idx]);
+            float got_im = bf16_to_f32(port_re[out_idx + 1]);
+
+            if (fabsf(got_re - gold_re) > threshold)
+                printf("Error port %d re[%d]: got %f, gold %f\n", i_port, i_re, got_re, gold_re);
+            if (fabsf(got_im - gold_im) > threshold)
+                printf("Error port %d im[%d]: got %f, gold %f\n", i_port, i_re, got_im, gold_im);
         }
-
-        float got_re = bf16_to_f32(port_re[i]);
-        float got_im = bf16_to_f32(port_re[i + 1]);
-
-        if (fabsf(got_re - gold_re) > 1000 * threshold)
-            printf("Error re[%d]: got %f, gold %f\n", i, got_re, gold_re);
-        if (fabsf(got_im - gold_im) > threshold)
-            printf("Error im[%d]: got %f, gold %f\n", i + 1, got_im, gold_im);
     }
     return 0;
 }
@@ -82,14 +93,12 @@ int main() {
   if (cid == 0) {
     port_re = (uint16_t  *)snrt_l1alloc(dotp_l.M * sizeof(uint16_t ));
   }
+
   snrt_cluster_hw_barrier();
   // Calculate dotp
-  if (cid == 0)
-    layer_map_precoding_v32b(input_re_in_dram, port_weights_in_dram, port_re);
+  layer_map_precoding_v32b(input_re_in_dram, port_weights_in_dram, port_re);
   // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
-  if (cid == 1)
-    layer_map_precoding_v32b(input_re_in_dram, port_weights_in_dram, port_re);
+
   snrt_cluster_hw_barrier();
   // End dump
   if (cid == 0)

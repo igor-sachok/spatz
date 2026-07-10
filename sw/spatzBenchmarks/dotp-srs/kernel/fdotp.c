@@ -68,13 +68,13 @@ void fdotp_cf_v32b(float *dotp_A_dram, float *dotp_B_dram, float *result_re, flo
     // Multiply and accumulate
     if (dim == orig_avl) {
       asm volatile("vfmul.vv v24, v20, v12");
-      asm volatile("vfmacc.vv v24, v8, v16");
       asm volatile("vfmul.vv v28, v8, v12");
+      asm volatile("vfmacc.vv v24, v8, v16");
       asm volatile("vfnmsac.vv v28, v20, v16");
     } else {
       asm volatile("vfmacc.vv v24, v20, v12");
-      asm volatile("vfmacc.vv v24, v8, v16");
       asm volatile("vfmacc.vv v28, v8, v12");
+      asm volatile("vfmacc.vv v24, v8, v16");
       asm volatile("vfnmsac.vv v28, v20, v16");
     }
 
@@ -105,6 +105,7 @@ void fdotp_cf_v32b(float *dotp_A_dram, float *dotp_B_dram, float *result_re, flo
     *result_re = acc_re;
     *result_im = acc_im;
   }
+  snrt_cluster_hw_barrier();
   if (cid == 0)
     timer2 = benchmark_get_cycle() - timer1;
 }

@@ -2,11 +2,10 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Parameters for a DOTP
+// Parameters for an FFT
 
 {
-    kernel: "DOTP"
-    M: 2048,
-    prec: 32,
-    expand: 0
+    npoints: 32,
+    ncores: 2,
+    prec: 32
 }

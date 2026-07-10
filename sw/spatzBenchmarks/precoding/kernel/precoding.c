@@ -1,29 +1,28 @@
-#include <snrt.h>
-//#include DATAHEADER   
-int nof_layers = 3;
+#include <snrt.h>  
+int nof_layers = 4;
 float *input_re;
 float *port_weights;
+extern unsigned int timer;
 
 void precoding_v32b(float *input_re_in_dram, float *port_weights_in_dram, uint16_t *port_re) {
   uint32_t cid = snrt_cluster_core_idx();
   uint32_t num_cores = snrt_cluster_core_num();
-  unsigned int dim = (dotp_l.M / num_cores)/2;
+  unsigned int dim = (precoding_l.M / num_cores)/2;
   const unsigned int orig_avl = dim;
   unsigned int vl;
   unsigned int vl32, vl16;
   unsigned int stride = 8;
+  unsigned int stride_half = stride / 2;
   unsigned int stride_b16 = 4;
-
-  float red;
     // Allocate the vectors
   if (cid == 0) {
-    input_re = (float *)snrt_l1alloc(nof_layers * dotp_l.M * sizeof(float));
+    input_re = (float *)snrt_l1alloc(nof_layers * precoding_l.M * sizeof(float));
     port_weights = (float *)snrt_l1alloc(nof_layers * 2 * sizeof(float));
   }
 
   // Initialize the matrices
   if (cid == 0) {
-    snrt_dma_start_1d(input_re, input_re_in_dram, nof_layers * dotp_l.M * sizeof(float));
+    snrt_dma_start_1d(input_re, input_re_in_dram, nof_layers * precoding_l.M * sizeof(float));
     snrt_dma_start_1d(port_weights, port_weights_in_dram, nof_layers * 2 * sizeof(float));
     snrt_dma_wait_all();
   }
@@ -35,36 +34,40 @@ void precoding_v32b(float *input_re_in_dram, float *port_weights_in_dram, uint16
   uint16_t *port_re_int = port_re + 2 * dim * cid;
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
-
+  if (cid == 0)
+    timer = benchmark_get_cycle();
+  snrt_cluster_hw_barrier();
+  asm volatile("csrwi 0x800, 0x1");
   switch (nof_layers){
     case 1: {
     unsigned int remaining = dim;
+    float w0 = port_weights[0];
+    float w1 = port_weights[1];
     do {
       // Set the vl
       asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(remaining));
 
       // Load chunk a and b
       asm volatile("vlse32.v v0, (%0), %1":: "r"(input_re_int), "r"(stride)); 
+      asm volatile("vfmul.vf v24, v0, %0":: "f"(w0));
+      asm volatile("vfmul.vf v28, v0, %0" :: "f"(w1));
+      
       asm volatile("vlse32.v v4, (%0), %1":: "r"(input_re_int + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
-      // Multiply
-      asm volatile("vfmul.vf v8, v0, %0":: "f"(port_weights[0]));
-      asm volatile("vfmul.vf v12, v4, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v16, v0, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v20, v4, %0":: "f"(port_weights[0]));
-      asm volatile("vfsub.vv v24, v8, v12");
-      asm volatile("vfadd.vv v28, v20, v16");
-      asm volatile("vsrl.vi v24, v24, 16");
-      asm volatile("vand.vx v28, v28, %0":: "r"(0xFFFF0000));
-      asm volatile("vor.vv v0, v24, v28"); 
-      asm volatile("vse32.v v0, (%0)":: "r"(port_re_int): "memory");
+      asm volatile("vfmacc.vf v28, %0, v4":: "f"(w0));
+      asm volatile("vfnmsac.vf v24, %0, v4" :: "f"(w1));
+
+      asm volatile("vsetvli %0, %1, e16, m2, ta, ma" : "=r"(vl) : "r"(remaining)); 
+      
+      asm volatile("vfncvt.f.f.w v8, v24");
+      asm volatile("vsse16.v v8, (%0), %1":: "r"(port_re_int),     "r"(stride_half)); 
+      
+      asm volatile("vfncvt.f.f.w v12, v28");
+      asm volatile("vsse16.v v12, (%0), %1":: "r"(port_re_int + 1), "r"(stride_half));
 
       // Bump pointers
       input_re_int += 2*vl;
-      port_re_int     += vl;
-      remaining -= vl;
+      port_re_int  += 2 * vl;
+      remaining    -= vl;
 
     } while (remaining > 0);
     break;
@@ -72,181 +75,173 @@ void precoding_v32b(float *input_re_in_dram, float *port_weights_in_dram, uint16
 
     case 2: {
           unsigned int remaining = dim;
+          float w0 = port_weights[0];
+          float w1 = port_weights[1];
+          float w2 = port_weights[2];
+          float w3 = port_weights[3];
+          float *input_re_int2 = input_re_int + precoding_l.M;
     do {
       // Set the vl
       asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(remaining));
 
       // Load chunk a and b
       asm volatile("vlse32.v v0, (%0), %1":: "r"(input_re_int), "r"(stride)); 
+      asm volatile("vfmul.vf v24, v0, %0":: "f"(w0));
+      asm volatile("vfmul.vf v28, v0, %0"  :: "f"(w1));
+
       asm volatile("vlse32.v v4, (%0), %1":: "r"(input_re_int + 1), "r"(stride));
-      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int + dotp_l.M ), "r"(stride)); 
-      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int + dotp_l.M + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
-      // Multiply
-      asm volatile("vfmul.vf v16, v0, %0":: "f"(port_weights[0]));
-      asm volatile("vfmul.vf v20, v4, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v24, v0, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v28, v4, %0":: "f"(port_weights[0]));
-      asm volatile("vfsub.vv v0, v16, v20");
-      asm volatile("vfadd.vv v4, v24, v28");
+      asm volatile("vfnmsac.vf v24, %0, v4" :: "f"(w1));
+      asm volatile("vfmacc.vf v28, %0, v4":: "f"(w0));
 
-      asm volatile("vfmul.vf v16, v8, %0":: "f"(port_weights[2]));
-      asm volatile("vfmul.vf v20, v12, %0":: "f"(port_weights[3]));
-      asm volatile("vfmul.vf v24, v8, %0":: "f"(port_weights[3]));
-      asm volatile("vfmul.vf v28, v12, %0":: "f"(port_weights[2]));
-      asm volatile("vfsub.vv v8, v16, v20");
-      asm volatile("vfadd.vv v12, v24, v28");
-      asm volatile("vfadd.vv v0, v0, v8");
-      asm volatile("vfadd.vv v4, v4, v12");
+      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int2), "r"(stride));
+      asm volatile("vfmacc.vf v24, %0, v8"  :: "f"(w2)); 
+      asm volatile("vfmacc.vf v28, %0, v8"  :: "f"(w3));
 
-      asm volatile("vsrl.vi v0, v0, 16");
-      asm volatile("vand.vx v4, v4, %0":: "r"(0xFFFF0000));
-      asm volatile("vor.vv v20, v0, v4"); 
+      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int2 + 1), "r"(stride));
+      asm volatile("vfnmsac.vf v24, %0, v12":: "f"(w3));
+      asm volatile("vfmacc.vf v28, %0, v12" :: "f"(w2));
 
-      asm volatile("vse32.v v20, (%0)":: "r"(port_re_int): "memory");
+      asm volatile("vsetvli %0, %1, e16, m2, ta, ma" : "=r"(vl) : "r"(remaining));
+
+      asm volatile("vfncvt.f.f.w v8, v24");
+      asm volatile("vsse16.v v8, (%0), %1":: "r"(port_re_int),     "r"(stride_half));
+
+      asm volatile("vfncvt.f.f.w v12, v28");
+      asm volatile("vsse16.v v12, (%0), %1":: "r"(port_re_int + 1), "r"(stride_half));
 
       // Bump pointers
-      input_re_int += 2*vl;
-      port_re_int     += vl;
-      remaining -= vl;
+      input_re_int  += 2*vl;
+      input_re_int2 += 2*vl;
+      port_re_int   += 2*vl;
+      remaining     -= vl;
     } while (remaining > 0);
     break;
     }
 
     case 3: {
           unsigned int remaining = dim;
+          float w0 = port_weights[0];
+          float w1 = port_weights[1];
+          float w2 = port_weights[2];
+          float w3 = port_weights[3];
+          float w4 = port_weights[4];
+          float w5 = port_weights[5];
+          float *input_re_int2 = input_re_int + precoding_l.M;
+          float *input_re_int3 = input_re_int + 2 * precoding_l.M;
     do {
       // Set the vl
       asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(remaining));
 
       // Load chunk a and b
       asm volatile("vlse32.v v0, (%0), %1":: "r"(input_re_int), "r"(stride)); 
+      asm volatile("vfmul.vf v24, v0, %0":: "f"(w0));
+      asm volatile("vfmul.vf v28, v0, %0"  :: "f"(w1));
+
       asm volatile("vlse32.v v4, (%0), %1":: "r"(input_re_int + 1), "r"(stride));
-      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int + dotp_l.M ), "r"(stride)); 
-      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int + dotp_l.M + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
-      // Multiply
-      asm volatile("vfmul.vf v16, v0, %0":: "f"(port_weights[0]));
-      asm volatile("vfmul.vf v20, v4, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v24, v0, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v28, v4, %0":: "f"(port_weights[0]));
-      asm volatile("vfsub.vv v0, v16, v20");
-      asm volatile("vfadd.vv v4, v24, v28");
+      asm volatile("vfnmsac.vf v24, %0, v4" :: "f"(w1));
+      asm volatile("vfmacc.vf v28, %0, v4":: "f"(w0));
 
-      asm volatile("vfmul.vf v16, v8, %0":: "f"(port_weights[2]));
-      asm volatile("vfmul.vf v20, v12, %0":: "f"(port_weights[3]));
-      asm volatile("vfmul.vf v24, v8, %0":: "f"(port_weights[3]));
-      asm volatile("vfmul.vf v28, v12, %0":: "f"(port_weights[2]));
-      asm volatile("vfsub.vv v8, v16, v20");
-      asm volatile("vfadd.vv v12, v24, v28");
-      asm volatile("vfadd.vv v0, v0, v8");
-      asm volatile("vfadd.vv v4, v4, v12");
+      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int2), "r"(stride)); 
+      asm volatile("vfmacc.vf v24, %0, v8"  :: "f"(w2));
+      asm volatile("vfmacc.vf v28, %0, v8"  :: "f"(w3));
 
-      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int + 2*dotp_l.M ), "r"(stride)); 
-      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int + 2*dotp_l.M + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
+      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int2 + 1), "r"(stride));
+      asm volatile("vfnmsac.vf v24, %0, v12":: "f"(w3));
+      asm volatile("vfmacc.vf v28, %0, v12" :: "f"(w2));
 
-      asm volatile("vfmul.vf v16, v8, %0":: "f"(port_weights[4]));
-      asm volatile("vfmul.vf v20, v12, %0":: "f"(port_weights[5]));
-      asm volatile("vfmul.vf v24, v8, %0":: "f"(port_weights[5]));
-      asm volatile("vfmul.vf v28, v12, %0":: "f"(port_weights[4]));
-      asm volatile("vfsub.vv v8, v16, v20");
-      asm volatile("vfadd.vv v12, v24, v28");
-      asm volatile("vfadd.vv v0, v0, v8");
-      asm volatile("vfadd.vv v4, v4, v12");
+      asm volatile("vlse32.v v16, (%0), %1":: "r"(input_re_int3 ), "r"(stride)); 
+      asm volatile("vfmacc.vf v24, %0, v16"  :: "f"(w4));
+      asm volatile("vfmacc.vf v28, %0, v16"  :: "f"(w5));
 
-      asm volatile("vsrl.vi v0, v0, 16");
-      asm volatile("vand.vx v4, v4, %0":: "r"(0xFFFF0000));
-      asm volatile("vor.vv v20, v0, v4"); 
-      asm volatile("vse32.v v20, (%0)":: "r"(port_re_int): "memory");
+      asm volatile("vlse32.v v20, (%0), %1":: "r"(input_re_int3 + 1), "r"(stride));
+      asm volatile("vfnmsac.vf v24, %0, v20":: "f"(w5));
+      asm volatile("vfmacc.vf v28, %0, v20" :: "f"(w4));
 
+      asm volatile("vsetvli %0, %1, e16, m2, ta, ma" : "=r"(vl) : "r"(remaining));
+      asm volatile("vfncvt.f.f.w v8, v24");
+      asm volatile("vsse16.v v8, (%0), %1":: "r"(port_re_int),     "r"(stride_half)); 
+      asm volatile("vfncvt.f.f.w v12, v28");
+      asm volatile("vsse16.v v12, (%0), %1":: "r"(port_re_int + 1), "r"(stride_half));
       // Bump pointers
-      input_re_int += 2*vl;
-      port_re_int     += vl;
-      remaining -= vl;
+      input_re_int  += 2*vl;
+      input_re_int2 += 2*vl;
+      input_re_int3 += 2*vl;
+      port_re_int   += 2*vl;
+      remaining     -= vl;
     } while (remaining > 0);
     break;
     }
 
-        case 4: {
-          unsigned int remaining = dim;
+    case 4: {
+    unsigned int remaining = dim;
+
+    float w0 = port_weights[0];
+    float w1 = port_weights[1];
+    float w2 = port_weights[2];
+    float w3 = port_weights[3];
+    float w4 = port_weights[4];
+    float w5 = port_weights[5];
+    float w6 = port_weights[6];
+    float w7 = port_weights[7];
+
+    float *input_re_int2 = input_re_int + precoding_l.M;
+    float *input_re_int3 = input_re_int + 2*precoding_l.M;
+    float *input_re_int4 = input_re_int + 3*precoding_l.M;
+
     do {
-      // Set the vl
-      asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl32) : "r"(remaining));
+      asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(remaining));
 
-      // Load chunk a and b
-      asm volatile("vlse32.v v0, (%0), %1":: "r"(input_re_int), "r"(stride)); 
+      asm volatile("vlse32.v v0, (%0), %1":: "r"(input_re_int), "r"(stride));
+      asm volatile("vfmul.vf v24, v0, %0":: "f"(w0));
+      asm volatile("vfmul.vf v28, v0, %0"  :: "f"(w1));
+
       asm volatile("vlse32.v v4, (%0), %1":: "r"(input_re_int + 1), "r"(stride));
-      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int + dotp_l.M ), "r"(stride)); 
-      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int + dotp_l.M + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
-      // Multiply
-      asm volatile("vfmul.vf v16, v0, %0":: "f"(port_weights[0]));
-      asm volatile("vfmul.vf v20, v4, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v24, v0, %0":: "f"(port_weights[1]));
-      asm volatile("vfmul.vf v28, v4, %0":: "f"(port_weights[0]));
-      asm volatile("vfsub.vv v0, v16, v20");
-      asm volatile("vfadd.vv v4, v24, v28");
+      asm volatile("vfnmsac.vf v24, %0, v4" :: "f"(w1));
+      asm volatile("vfmacc.vf v28, %0, v4":: "f"(w0));
 
-      asm volatile("vfmul.vf v16, v8, %0":: "f"(port_weights[2]));
-      asm volatile("vfmul.vf v20, v12, %0":: "f"(port_weights[3]));
-      asm volatile("vfmul.vf v24, v8, %0":: "f"(port_weights[3]));
-      asm volatile("vfmul.vf v28, v12, %0":: "f"(port_weights[2]));
-      asm volatile("vfsub.vv v8, v16, v20");
-      asm volatile("vfadd.vv v12, v24, v28");
-      asm volatile("vfadd.vv v0, v0, v8");
-      asm volatile("vfadd.vv v4, v4, v12");
+      asm volatile("vlse32.v v16, (%0), %1":: "r"(input_re_int2), "r"(stride));
+      asm volatile("vfmacc.vf v24, %0, v16"  :: "f"(w2));
+      asm volatile("vfmacc.vf v28, %0, v16"  :: "f"(w3));
 
-      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int + 2*dotp_l.M ), "r"(stride)); 
-      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int + 2*dotp_l.M + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
+      asm volatile("vlse32.v v20, (%0), %1":: "r"(input_re_int2 + 1), "r"(stride));
+      asm volatile("vfnmsac.vf v24, %0, v20":: "f"(w3));
+      asm volatile("vfmacc.vf v28, %0, v20" :: "f"(w2));
 
-      asm volatile("vfmul.vf v16, v8, %0":: "f"(port_weights[4]));
-      asm volatile("vfmul.vf v20, v12, %0":: "f"(port_weights[5]));
-      asm volatile("vfmul.vf v24, v8, %0":: "f"(port_weights[5]));
-      asm volatile("vfmul.vf v28, v12, %0":: "f"(port_weights[4]));
-      asm volatile("vfsub.vv v8, v16, v20");
-      asm volatile("vfadd.vv v12, v24, v28");
-      asm volatile("vfadd.vv v0, v0, v8");
-      asm volatile("vfadd.vv v4, v4, v12");
+      asm volatile("vlse32.v v0, (%0), %1":: "r"(input_re_int3), "r"(stride));
+      asm volatile("vfmacc.vf  v24, %0, v0":: "f"(w4));
+      asm volatile("vfmacc.vf  v28, %0, v0":: "f"(w5));
 
-      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int + 3*dotp_l.M ), "r"(stride)); 
-      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int + 3*dotp_l.M + 1), "r"(stride));
-      for (int i = 0; i < 40; i++){
-        asm volatile("nop");
-      }
+      asm volatile("vlse32.v v4, (%0), %1":: "r"(input_re_int3 + 1), "r"(stride));
+      asm volatile("vfnmsac.vf v24, %0, v4":: "f"(w5));
+      asm volatile("vfmacc.vf  v28, %0, v4":: "f"(w4));
 
-      asm volatile("vfmul.vf v16, v8, %0":: "f"(port_weights[6]));
-      asm volatile("vfmul.vf v20, v12, %0":: "f"(port_weights[7]));
-      asm volatile("vfmul.vf v24, v8, %0":: "f"(port_weights[7]));
-      asm volatile("vfmul.vf v28, v12, %0":: "f"(port_weights[6]));
-      asm volatile("vfsub.vv v8, v16, v20");
-      asm volatile("vfadd.vv v12, v24, v28");
-      asm volatile("vfadd.vv v0, v0, v8");
-      asm volatile("vfadd.vv v4, v4, v12");
+      asm volatile("vlse32.v v8, (%0), %1":: "r"(input_re_int4), "r"(stride));
+      asm volatile("vfmacc.vf  v24, %0, v8":: "f"(w6));
+      asm volatile("vfmacc.vf  v28, %0, v8":: "f"(w7));
 
-      asm volatile("vsrl.vi v0, v0, 16");
-      asm volatile("vand.vx v4, v4, %0":: "r"(0xFFFF0000));
-      asm volatile("vor.vv v20, v0, v4"); 
+      asm volatile("vlse32.v v12, (%0), %1":: "r"(input_re_int4 + 1), "r"(stride));
+      asm volatile("vfnmsac.vf v24, %0, v12":: "f"(w7));
+      asm volatile("vfmacc.vf  v28, %0, v12":: "f"(w6));
 
-      asm volatile("vse32.v v20, (%0)":: "r"(port_re_int): "memory");
+      asm volatile("vsetvli %0, %1, e16, m2, ta, ma" : "=r"(vl) : "r"(remaining));
+      asm volatile("vfncvt.f.f.w v8, v24");
+      asm volatile("vsse16.v v8, (%0), %1":: "r"(port_re_int), "r"(stride_half));
+      asm volatile("vfncvt.f.f.w v12, v28");
+      asm volatile("vsse16.v v12, (%0), %1":: "r"(port_re_int + 1), "r"(stride_half));
 
       // Bump pointers
-      input_re_int += 2*vl;
-      port_re_int  += vl;
+      input_re_int  += 2*vl;
+      input_re_int2 += 2*vl;
+      input_re_int3 += 2*vl;
+      input_re_int4 += 2*vl;
+      port_re_int   += 2*vl;
       remaining    -= vl;
     } while (remaining > 0);
     break;
-    }
+}
   }
+  snrt_cluster_hw_barrier();
+    // End timer and check if new best runtime
+  if (cid == 0)
+    timer = benchmark_get_cycle() - timer;
 }

@@ -36,15 +36,14 @@ static inline float bf16_to_fp32(uint16_t bits) {
 }
 
 static inline int fp_check(uint16_t *port_re, const float *a, const float *b) {
-    const float threshold = 0.003f;
-    for (int i = 0; i < dotp_l.M; i += 2) {
-        int i_re = i / 2; 
+    const float threshold = 0.001f;
+    for (int i = 0; i < precoding_l.M; i += 2) {
         float gold_re = 0.0f;
         float gold_im = 0.0f;
         for (int l = 0; l < nof_layers; l++) {
-            float in_re = a[i_re * nof_layers * 2 + l * 2];
-            float in_im = a[i_re * nof_layers * 2 + l * 2 + 1];
-            float w_re  = b[l * 2];
+            float in_re = a[l * precoding_l.M + i];
+            float in_im = a[l * precoding_l.M + i + 1];
+            float w_re  = b[l * 2];      
             float w_im  = b[l * 2 + 1];
             gold_re += in_re * w_re - in_im * w_im;
             gold_im += in_re * w_im + in_im * w_re;
@@ -67,7 +66,7 @@ int main() {
   timer = (unsigned int)-1;
   uint32_t num_cores = snrt_cluster_core_num();
   uint32_t cid = snrt_cluster_core_idx();
-  const unsigned int dim = (dotp_l.M / num_cores)/2;
+  const unsigned int dim = (precoding_l.M / num_cores)/2;
   // Start dump
   if (cid == 0)
     start_kernel();
@@ -77,7 +76,7 @@ int main() {
     timer = benchmark_get_cycle();
   snrt_cluster_hw_barrier();
   if (cid == 0) {
-    port_re = (uint16_t *)snrt_l1alloc(dotp_l.M * sizeof(uint16_t));
+    port_re = (uint16_t *)snrt_l1alloc(precoding_l.M * sizeof(uint16_t));
   }
   snrt_cluster_hw_barrier();
   // Calculate precoding
@@ -89,20 +88,17 @@ int main() {
   if (cid == 0)
     stop_kernel();
 
-  // End timer and check if new best runtime
-  if (cid == 0)
-    timer = benchmark_get_cycle() - timer;
+
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
+
   // Check and display results
   if (cid == 0) {
-    long unsigned int performance = 1000 * 2 * dotp_l.M / (timer);
+    long unsigned int performance = 1000 * 3 * precoding_l.M / (timer);
     long unsigned int utilization =
         performance / (2 * num_cores * SNRT_NFPU_PER_CORE);
-
-    printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
-    //printf("The execution took %u cycles.\n", timer);
-    printf("The memory allocation and data copy took %u cycles.\n", timer);
+    printf("\n----- (%d) sp precoding -----\n", precoding_l.M);
+    printf("The Spatz computation took %u cycles.\n", timer);
     printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
            performance, utilization);
   }

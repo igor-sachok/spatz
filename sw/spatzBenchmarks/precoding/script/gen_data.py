@@ -6,143 +6,77 @@
 # Author: Matheus Cavalcante <matheusd@iis.ee.ethz.ch>
 
 import numpy as np
-import torch
 import argparse
 import pathlib
 import hjson
-from functools import reduce
 
 np.random.seed(42)
-torch.manual_seed(42)
 
 global verbose
 
 
-def array_to_cstr(a, fmt=float):
+def array_to_cstr(a):
     out = "{"
-    if fmt == float:
-        if isinstance(a, np.ndarray):
-            a = a.flat
-        if isinstance(a, torch.Tensor):
-            a = a.numpy().flat
-        for el in a:
-            out += "{}, ".format(el)
-    else:
-        for sign, exp, mant in zip(
-            a["sign"].numpy().flat,
-            a["exponent"].numpy().flat,
-            a["mantissa"].numpy().flat,
-        ):
-            value = sign * 2**7 + exp * 2**2 + mant
-            out += "0x{:02x}, ".format(value)
+    if isinstance(a, np.ndarray):
+        a = a.flatten()
+    for el in a:
+        out += "{}, ".format(el)
     out = out[:-2] + "}"
     return out
 
 
-def emit_header_file(layer_type: str, **kwargs):
-
+def emit_header_file(**kwargs):
     file_path = pathlib.Path(__file__).parent.parent / "data"
     file_path.mkdir(parents=True, exist_ok=True)
     emit_str = (
         "// Copyright 2023 ETH Zurich and University of Bologna.\n"
-        + "// Licensed under the Apache License, Version 2.0, see LICENSE for details.\n"
-        + "// SPDX-License-Identifier: Apache-2.0\n\n"
-        + "// This file was generated automatically.\n\n"
+        "// Licensed under the Apache License, Version 2.0, see LICENSE for details.\n"
+        "// SPDX-License-Identifier: Apache-2.0\n\n"
+        "// This file was generated automatically.\n\n"
     )
-
-    file = file_path / ("data_" + str(kwargs["M"]) + ".h")
-    emit_str += emit_dotp_layer(**kwargs)
+    file = file_path / ("data_{}.h".format(kwargs["M"]))
+    emit_str += emit_precoding_layer(**kwargs)
     with file.open("w") as f:
         f.write(emit_str)
 
 
-def emit_dotp_layer(name="dotp", **kwargs):
-    vec_A = kwargs["A"]
-    vec_B = kwargs["B"]
-    result = kwargs["result"]
-
+def emit_precoding_layer(name="precoding", **kwargs):
     m = kwargs["M"]
+    nof_layers = kwargs["nof_layers"]
+    input_re = kwargs["input_re"]
+    port_weights = kwargs["port_weights"]
 
     layer_str = ""
     layer_str += '#include "layer.h"\n\n'
-    layer_str += f"dotp_layer {name}_l = {{\n"
+    # nof_layers is driven by the config; precoding.c reads it via NOF_LAYERS.
+    layer_str += "#define NOF_LAYERS {}\n\n".format(nof_layers)
+    layer_str += f"precoding_layer {name}_l = {{\n"
     layer_str += f"\t.M = {m},\n"
     layer_str += f'\t.dtype = FP{kwargs["prec"]},\n'
     layer_str += "};\n\n\n"
 
-    ctypes = {"64": "double", "32": "float", "16": "__fp16", "8": "char"}
-
-    dtype = ctypes[str(kwargs["prec"])]
-    if dtype != "char":
-        layer_str += (
-            f'static {dtype} {name}_A_dram [{m}] __attribute__((section(".data"))) = '
-            + array_to_cstr(vec_A)
-            + ";\n\n\n"
-        )
-        layer_str += (
-            f'static {dtype} {name}_B_dram [{m}] __attribute__((section(".data"))) = '
-            + array_to_cstr(vec_B)
-            + ";\n\n\n"
-        )
-        layer_str += (
-            f'static {dtype} {name}_result __attribute__((section(".data"))) = '
-            + array_to_cstr(result)
-            + ";\n\n\n"
-        )
-    else:
-        layer_str += (
-            f"static {dtype} {name}_A_dram [{m}] = "
-            + array_to_cstr(kwargs["bits_A"], fmt="char")
-            + ";\n\n\n"
-        )
-        layer_str += (
-            f"static {dtype} {name}_B_dram [{m}] = "
-            + array_to_cstr(kwargs["bits_B"], fmt="char")
-            + ";\n\n\n"
-        )
-        layer_str += (
-            f"static {dtype} {name}_result = "
-            + array_to_cstr(kwargs["result"], fmt="char")
-            + ";\n\n\n"
-        )
-
+    # Names must match what main.c / precoding_v32b() expect:
+    #   input_re_in_dram      : nof_layers * M floats, per layer [re, im, re, im, ...]
+    #   port_weights_in_dram  : 2 floats per layer, [re, im] per layer
+    layer_str += (
+        f"static float input_re_in_dram [{nof_layers * m}] "
+        '__attribute__((section(".data"))) = '
+        + array_to_cstr(input_re)
+        + ";\n\n\n"
+    )
+    layer_str += (
+        f"static float port_weights_in_dram [{2 * nof_layers}] "
+        '__attribute__((section(".data"))) = '
+        + array_to_cstr(port_weights)
+        + ";\n\n\n"
+    )
     return layer_str
 
 
-def rand_data_generator(shape, prec, alt=False):
-    if prec == 64:
-        return torch.randn(shape, requires_grad=False, dtype=torch.float64), {}
-    elif prec == 32:
-        return torch.randn(shape, requires_grad=False, dtype=torch.float32), {}
-    elif prec == 16:
-        if alt:
-            return torch.randn(shape, requires_grad=False, dtype=torch.bfloat16), {}
-        else:
-            return torch.randn(shape, requires_grad=False, dtype=torch.float16), {}
-    elif prec == 8:
-        sign = torch.randint(
-            0, 2, shape, requires_grad=False, dtype=torch.uint8
-        )  # -1 or 1
-        exponent = torch.randint(
-            0, 16, shape, requires_grad=False, dtype=torch.uint8
-        )  # < 0b01111
-        mantissa = torch.randint(
-            0, 4, shape, requires_grad=False, dtype=torch.uint8
-        )  # can be arbitrary
-        bits = {"sign": sign, "exponent": exponent, "mantissa": mantissa}
-        # TODO: not actually correct
-        return ((-1.0) ** sign.double()) * (2.0 ** (exponent.double() - 15.0)) * (
-            1.0 + mantissa.double() / (2**2)
-        ), bits
-
-
-def dotp(a, b):
-    return reduce(lambda a, b: a + b, np.multiply(a, b))
-
-
 def main():
-
-    parser = argparse.ArgumentParser(description="Generate data for kernels")
+    parser = argparse.ArgumentParser(
+        description="Generate data for the precoding kernel"
+    )
     parser.add_argument(
         "-c",
         "--cfg",
@@ -151,7 +85,6 @@ def main():
         help="Select param config file kernel",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Set verbose")
-
     args = parser.parse_args()
 
     global verbose
@@ -160,22 +93,27 @@ def main():
     with args.cfg.open() as f:
         param = hjson.loads(f.read())
 
-    vec_A, bits_A = rand_data_generator((param["M"], 1), param["prec"])
-    vec_B, bits_B = rand_data_generator((param["M"], 1), param["prec"])
-    result = dotp(vec_A, vec_B)
+    m = param["M"]
+    nof_layers = param["nof_layers"]
+    prec = param["prec"]
+
+    input_re = np.random.randn(nof_layers, m).astype(np.float32)
+    port_weights = np.random.randn(nof_layers, 2).astype(np.float32)
+
+    if verbose:
+        print(f"M={m}, nof_layers={nof_layers}, prec={prec}")
+        print(f"input_re shape     : {input_re.shape}")
+        print(f"port_weights shape : {port_weights.shape}")
 
     kwargs = {
-        "A": vec_A,
-        "B": vec_B,
-        "result": result,
-        "M": param["M"],
-        "prec": param["prec"],
-        "expand": param["expand"],
-        "bits_A": bits_A,
-        "bits_B": bits_B,
+        "M": m,
+        "prec": prec,
+        "nof_layers": nof_layers,
+        "input_re": input_re,
+        "port_weights": port_weights,
     }
 
-    emit_header_file("dotp", **kwargs)
+    emit_header_file(**kwargs)
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@
 // Parameters for a DOTP
 
 {
-    kernel: "DOTP"
-    M: 4096,
+    kernel: "PRECODING",
+    M: 128,
     prec: 32,
-    expand: 0
+    nof_layers: 2
 }
