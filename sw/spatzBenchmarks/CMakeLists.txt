@@ -111,6 +111,7 @@ if (ELEN EQUAL 64)
   add_library(dp-fconv2d dp-fconv2d/kernel/fconv2d.c)
 
   add_library(dp-fft dp-fft/kernel/fft.c)
+  add_library(srs-prod srs-prod/kernel/prod.c)
 endif()
 
 add_library(sp-fmatmul sp-fmatmul/kernel/sp-fmatmul.c)
@@ -123,6 +124,8 @@ add_library(sdotp-hp-fmatmul sdotp-hp-fmatmul/kernel/sdotp-fmatmul.c)
 add_library(sdotp-bp-fmatmul sdotp-bp-fmatmul/kernel/sdotp-fmatmul.c)
 
 add_library(sp-fft sp-fft/kernel/fft.c)
+add_library(srs-fft srs-fft/kernel/srs-fft.c)
+add_library(srs-hard-decision srs-hard-decision/kernel/hard_decision.c)
 
 # Tests
 enable_testing()
@@ -144,6 +147,15 @@ if (ELEN EQUAL 64)
   add_spatz_test_threeParam(dp-fconv2d dp-fconv2d/main.c 64 64 7)
 
   add_spatz_test_twoParam(dp-fft dp-fft/main.c 128 2)
+  add_spatz_test_oneParam(srs-prod srs-prod/main.c 128)
+  add_spatz_test_oneParam(srs-prod srs-prod/main.c 8)
+  add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 2048)
+  add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 4096)
+  add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 128)
+  add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 8)
+  add_spatz_test_oneParam(precoding precoding/main.c 128)
+  add_spatz_test_oneParam(precoding precoding/main.c 4096)
+  add_spatz_test_oneParam(layer-map-precoding layer-map-precoding/main.c 128)
 
 endif()
 
@@ -178,6 +190,15 @@ add_spatz_test_threeParam_type(hp-sa-gemv sa-gemv/main.c 128 4096 512 16)
 
 add_spatz_test_twoParam(sp-fft sp-fft/main.c 256 2)
 add_spatz_test_twoParam(sp-fft sp-fft/main.c 512 2)
+
+add_spatz_test_twoParam(srs-fft srs-fft/main.c 32 2)
+add_spatz_test_twoParam(srs-fft srs-fft/main.c 256 2)
+add_spatz_test_twoParam(srs-fft srs-fft/main.c 512 2)
+
+add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 8 2)
+add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 200 2)
+add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 384 2)
+add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 512 2)
 
 # Ventaglio sparse benchmarks. The kernels carry BOTH a Ventaglio (vfx)
 # implementation and a baseline RVV reference compiled in via the
