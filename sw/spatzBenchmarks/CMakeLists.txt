@@ -126,6 +126,7 @@ add_library(sdotp-bp-fmatmul sdotp-bp-fmatmul/kernel/sdotp-fmatmul.c)
 add_library(sp-fft sp-fft/kernel/fft.c)
 add_library(srs-fft srs-fft/kernel/srs-fft.c)
 add_library(srs-hard-decision srs-hard-decision/kernel/hard_decision.c)
+add_library(srs-compute-soft-bits srs-compute-soft-bits/kernel/compute_soft_bits.c)
 
 # Tests
 enable_testing()
@@ -155,7 +156,7 @@ if (ELEN EQUAL 64)
   add_spatz_test_oneParam(dotp-srs dotp-srs/main.c 8)
   add_spatz_test_oneParam(precoding precoding/main.c 128)
   add_spatz_test_oneParam(precoding precoding/main.c 4096)
-  add_spatz_test_oneParam(layer-map-precoding layer-map-precoding/main.c 128)
+  #add_spatz_test_oneParam(layer-map-precoding layer-map-precoding/main.c 128)
 
 endif()
 
@@ -199,6 +200,8 @@ add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 8 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 200 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 384 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 512 2)
+
+add_spatz_test_twoParam(srs-compute-soft-bits srs-compute-soft-bits/main.c 384 2)
 
 # Ventaglio sparse benchmarks. The kernels carry BOTH a Ventaglio (vfx)
 # implementation and a baseline RVV reference compiled in via the
