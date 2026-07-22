@@ -231,6 +231,11 @@ module spatz_simd_lane import spatz_pkg::*; import rvv_pkg::vew_e; #(
         VSLL                             : simd_result = shift_operand << shift_amount;
         VSRL                             : simd_result = shift_operand >> shift_amount;
         VSRA                             : simd_result = $signed(shift_operand) >>> shift_amount;
+        VMSLT, VMSLTU                    : simd_result = Width'($signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) <  $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}));
+        VMSLE, VMSLEU                    : simd_result = Width'($signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) <= $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}));
+        VMSGT, VMSGTU                    : simd_result = Width'($signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) >  $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}));
+        VMSEQ                            : simd_result = Width'(op_s1_i == op_s2_i);
+        VMSNE                            : simd_result = Width'(op_s1_i != op_s2_i);
         // TODO: Change selection when SEW does not equal Width
         VMUL                             : simd_result = mult_result[Width-1:0];
         VMULH, VMULHU, VMULHSU           : begin
@@ -245,6 +250,7 @@ module spatz_simd_lane import spatz_pkg::*; import rvv_pkg::vew_e; #(
           simd_result    = div_result;
           result_valid_o = div_out_valid;
         end
+        VMERGE: simd_result = op_s1_i;
         default: simd_result = '0;
       endcase // operation_i
     end

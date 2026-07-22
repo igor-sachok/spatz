@@ -127,6 +127,7 @@ add_library(sp-fft sp-fft/kernel/fft.c)
 add_library(srs-fft srs-fft/kernel/srs-fft.c)
 add_library(srs-hard-decision srs-hard-decision/kernel/hard_decision.c)
 add_library(srs-compute-soft-bits srs-compute-soft-bits/kernel/compute_soft_bits.c)
+add_library(srs-compute-var-to-check-msgs srs-compute-var-to-check-msgs/kernel/compute_var_to_check_msgs.c)
 
 # Tests
 enable_testing()
@@ -202,6 +203,8 @@ add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 384 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 512 2)
 
 add_spatz_test_twoParam(srs-compute-soft-bits srs-compute-soft-bits/main.c 384 2)
+add_spatz_test_twoParam(srs-compute-var-to-check-msgs srs-compute-var-to-check-msgs/main.c 384 2)
+
 
 # Ventaglio sparse benchmarks. The kernels carry BOTH a Ventaglio (vfx)
 # implementation and a baseline RVV reference compiled in via the

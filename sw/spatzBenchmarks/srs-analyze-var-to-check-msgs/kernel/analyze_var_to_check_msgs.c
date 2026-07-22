@@ -1,71 +1,59 @@
-#include "compute_soft_bits.h"
+#include "analyze_var_to_check_msgs.h"
 #include <stddef.h>
 #include <snrt.h>
 
-void compute_soft_bits(int8_t *this_soft_bits, const int8_t *this_var_to_check, const int8_t *this_check_to_var, const uint32_t lifting_size) {
+void analyze_var_to_check_msgs(int8_t *min_var_to_check, int8_t *second_min_var_to_check, uint8_t *min_var_to_check_index, uint8_t *sign_prod_var_to_check, const int8_t *rotated_node, const uint32_t var_node, const uint32_t lifting_size) {
   uint32_t remaining = lifting_size;
   uint32_t vl;
-  int16_t llr_max = 120;
-  int16_t llr_min = -120;
-  int16_t llr_inf = 127;
-  int16_t llr_inf_neg = -127;
 
   do {
     asm volatile("vsetvli %0, %1, e8, m2, ta, mu" : "=r"(vl) : "r"(remaining));
-    asm volatile("vle8.v v4, (%0)" :: "r"(this_var_to_check) : "memory"); 
-    asm volatile("vle8.v v8, (%0)" :: "r"(this_check_to_var) : "memory");
+    asm volatile("vle8.v v2, (%0)" :: "r"(min_var_to_check) : "memory"); 
+    asm volatile("vle8.v v4, (%0)" :: "r"(second_min_var_to_check) : "memory");
+    asm volatile("vle8.v v6, (%0)" :: "r"(min_var_to_check_index) : "memory"); 
+    asm volatile("vle8.v v8, (%0)" :: "r"(sign_prod_var_to_check) : "memory");
+    asm volatile("vle8.v v10, (%0)" :: "r"(rotated_node) : "memory");
 
-    asm volatile("vwadd.vv v12, v4, v8");
-    asm volatile("vwadd.vx v20, v4, x0");
-    asm volatile("vwadd.vx v24, v8, x0");
+    // Compute abs(rotated_node)
+    asm volatile("vrsub.vi v12, v10, 0");
+    asm volatile("vmax.vv v14, v10, v12");
 
-    asm volatile("vsetvli %0, %1, e16, m4, ta, mu" : "=r"(vl) : "r"(remaining));
-    //save the initial summ
-    asm volatile("vmv.v.v v16, v12");
+    // Compare var_to_check_abs with min_var_to_checks
+    asm volatile("vmsgt.vv v0, v6, v14"); 
 
-    //Compare with max value
-    asm volatile("vmsgt.vx v0, v12, %0" :: "r"(llr_max));
-    asm volatile("vmerge.vxm v12, v12, %0, v0" :: "r"(llr_inf));
-    //Compare with min value
-    asm volatile("vmslt.vx v0, v12, %0":: "r"(llr_min));
-    asm volatile("vmerge.vxm v12, v12, %0, v0" :: "r"(llr_inf_neg));
+    // Compute new_second_min
+    asm volatile("vadd.vv v16, v14, v2, v0.t");
+    // Compute new min_var_to_checks
+    asm volatile("vadd.vv v18, v2, v14, v0.t");
+    // Compute new min_var_to_check_index
+    asm volatile("vadd.vx v20, v6, %0, v0.t" :: "r"(var_node));
 
-    //If val_b is inf -> return val_b
-    asm volatile("vmseq.vx v0, v24, %0" :: "r"(llr_inf));
-    asm volatile("vmerge.vvm v12, v12, v24, v0");
+    // Compare var_to_check_abs and second_min_var_to_check
+    asm volatile("vmsgt.vv v0, v4, v14"); 
 
-    //If val_b is -inf -> return val_b
-    asm volatile("vmseq.vx v0, v24, %0" :: "r"(llr_inf_neg));
-    asm volatile("vmerge.vvm v12, v12, v24, v0");
+    // Compute second_min_var_to_check
+    asm volatile("vadd.vv v22, v4, v16, v0.t");
 
-    //If val_a is inf -> return val_a
-    asm volatile("vmseq.vx v0, v20, %0" :: "r"(llr_inf));
-    asm volatile("vmerge.vvm v12, v12, v20, v0");
+    // Compute sign_prod_var_to_check
+    asm volatile("vmsgt.vi v0, v10, 0");
 
-    //If val_a is -inf -> return val_a
-    asm volatile("vmseq.vx v0, v20, %0" :: "r"(llr_inf_neg));
-    asm volatile("vmerge.vvm v12, v12, v20, v0");
 
-    // If check if initial summ gave 0 -> return 0
-    asm volatile("vmseq.vi v0, v16, 0");
-    asm volatile("vmerge.vim v12, v12, 0, v0");
-    //asm volatile("vadd.vi v12, v28, 0, v0.t");
-    // This should be replaced with 1 narrowing integer instruction. 
-    asm volatile("vfcvt.f.x.v v12, v12");
-    asm volatile("vsetvli %0, %1, e8, m2, ta, mu" : "=r"(vl) : "r"(remaining));
-    asm volatile("vfncvt.x.f.w v4, v12");
-    asm volatile("vse8.v v4, (%0)" :: "r"(this_soft_bits) : "memory");
+
+
+    asm volatile("vse8.v v4, (%0)" :: "r"(this_soft_bits));
 
  
-    this_var_to_check += vl;
-    this_check_to_var += vl;
-    this_soft_bits += vl;
+    min_var_to_check += vl;
+    second_min_var_to_check += vl;
+    min_var_to_check_index += vl;
+    sign_prod_var_to_check += vl;
+    rotated_node += vl;
     remaining    -= vl;
   } while (remaining > 0);
 }
 
 
-void compute_soft_bits_float(int8_t *this_soft_bits,
+void compute_soft_bits(int8_t *this_soft_bits,
                        const int8_t *this_var_to_check,
                        const int8_t *this_check_to_var,
                        const uint32_t lifting_size)

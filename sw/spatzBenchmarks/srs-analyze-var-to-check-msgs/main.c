@@ -133,7 +133,6 @@ int main() {
     timer = benchmark_get_cycle();
   //One compute per core.
   snrt_cluster_hw_barrier();
-  if (cid == 0)
   compute_soft_bits(this_soft_bits + cid * lifting_size, this_var_to_check + cid * lifting_size, this_check_to_var + cid * lifting_size, lifting_size);
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
@@ -164,10 +163,10 @@ int main() {
     compute_soft_bits_check(this_soft_bits, this_var_to_check, this_check_to_var,
                           0, lifting_size);
   }
-  //if (cid == 0) {
-    //compute_soft_bits_check(this_soft_bits, this_var_to_check, this_check_to_var,
-   //                       lifting_size, lifting_size);
-  //}
+  if (cid == 0) {
+    compute_soft_bits_check(this_soft_bits, this_var_to_check, this_check_to_var,
+                          lifting_size, lifting_size);
+  }
   // Wait for core 0 to finish displaying results
   snrt_cluster_hw_barrier();
 
