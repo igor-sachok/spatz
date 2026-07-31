@@ -225,7 +225,7 @@ module spatz_simd_lane import spatz_pkg::*; import rvv_pkg::vew_e; #(
               simd_result = adder_result[8*(2**i)] ? ((Width'(1) << (8*(2**i))) - Width'(1))
                                                    : adder_result[Width-1:0];
         end
-         VSADD                           : begin
+        VSADD                           : begin
           simd_result = (arith_op1[Width-1] == arith_op2[Width-1]) &&
                         (adder_result[Width-1] != arith_op1[Width-1])
                       ? (arith_op1[Width-1] ? {1'b1, {Width-1{1'b0}}}
@@ -238,6 +238,27 @@ module spatz_simd_lane import spatz_pkg::*; import rvv_pkg::vew_e; #(
                           ? (arith_op1[8*(2**i)-1] ? ( Width'(1) << (8*(2**i)-1))
                                                    : ((Width'(1) << (8*(2**i)-1)) - Width'(1)))
                           : adder_result[Width-1:0];
+        end
+        VSSUBU: begin
+          simd_result = subtractor_result[Width] ? '0 : subtractor_result[Width-1:0];
+          for (int i = 0; i < $clog2(Width/8); i++)
+            if (sew_i == rvv_pkg::vew_e'(i))
+              simd_result = subtractor_result[8*(2**i)] ? '0
+                                                        : subtractor_result[Width-1:0];
+        end
+        VSSUB: begin
+          simd_result = (arith_op2[Width-1] != arith_op1[Width-1]) &&
+                        (subtractor_result[Width-1] != arith_op2[Width-1])
+                      ? (arith_op2[Width-1] ? {1'b1, {Width-1{1'b0}}}     // MIN
+                                            : {1'b0, {Width-1{1'b1}}})    // MAX
+                      : subtractor_result[Width-1:0];
+          for (int i = 0; i < $clog2(Width/8); i++)
+            if (sew_i == rvv_pkg::vew_e'(i))
+              simd_result = (arith_op2[8*(2**i)-1] != arith_op1[8*(2**i)-1]) &&
+                            (subtractor_result[8*(2**i)-1] != arith_op2[8*(2**i)-1])
+                          ? (arith_op2[8*(2**i)-1] ? ( Width'(1) << (8*(2**i)-1))
+                                                   : ((Width'(1) << (8*(2**i)-1)) - Width'(1)))
+                          : subtractor_result[Width-1:0];
         end
         VMIN, VMINU                      : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) <= $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;
         VMAX, VMAXU                      : simd_result = $signed({op_s1_i[Width-1] & is_signed_i, op_s1_i}) > $signed({op_s2_i[Width-1] & is_signed_i, op_s2_i}) ? op_s1_i : op_s2_i;

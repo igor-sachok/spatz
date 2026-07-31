@@ -2,15 +2,10 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Parameters for Compute soft bits
+// Parameters for scale_llr
 {
-    kernel: "ANALYZE_VAR_TO_CHECKS_MSGS"
+    kernel: "SCALE_LLR"
     lifting_size: 384,
     num_cores: 2,
-    var_node: 7,
-    inf_prob: 0.05,
-    zero_prob: 0.05,
-    narrow_prob: 0.25,
-    tie_prob: 0.05,
-    empty_prob: 0.10
+    inf_prob: 0.01
 }

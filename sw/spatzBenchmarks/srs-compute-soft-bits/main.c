@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
+// Author: Ihor Sachok <ihor.sachok@unibo.it>
 
 #include <benchmark.h>
 #include <debug.h>
@@ -133,7 +133,7 @@ int main() {
     timer = benchmark_get_cycle();
   //One compute per core.
   snrt_cluster_hw_barrier();
-  if (cid == 0)
+
   compute_soft_bits(this_soft_bits + cid * lifting_size, this_var_to_check + cid * lifting_size, this_check_to_var + cid * lifting_size, lifting_size);
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
@@ -148,11 +148,13 @@ int main() {
   snrt_cluster_hw_barrier();
   // Check and display results
   if (cid == 0) {
-    long unsigned int performance = 1000 * 3 * 2 * lifting_size / timer;
+    long unsigned int performance = 1000 * 9 * lifting_size / timer;
     long unsigned int utilization =
-        performance / (4 * num_cores * 1);
-        // data 8bit how many can IPU process? probably 4
-        // (1 IPU per Spatz core)
+        performance / (4 * 4 * 1);
+        // each kernel computes 2 * 2 * lifting_size elements
+        // data 8bit how many can IPU process? - 4
+        // (4 IPU per Spatz core)
+        // 9 operations per element
 
     printf("\n----- (%d) compute_soft_bits -----\n", lifting_size);
     printf("The execution took %u cycles.\n", timer);
@@ -164,10 +166,10 @@ int main() {
     compute_soft_bits_check(this_soft_bits, this_var_to_check, this_check_to_var,
                           0, lifting_size);
   }
-  //if (cid == 0) {
-    //compute_soft_bits_check(this_soft_bits, this_var_to_check, this_check_to_var,
-   //                       lifting_size, lifting_size);
-  //}
+  if (cid == 0) {
+    compute_soft_bits_check(this_soft_bits, this_var_to_check, this_check_to_var,
+                          lifting_size, lifting_size);
+  }
   // Wait for core 0 to finish displaying results
   snrt_cluster_hw_barrier();
 

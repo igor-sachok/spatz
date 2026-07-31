@@ -5,7 +5,7 @@
 // Parameters for Compute soft bits
 {
     kernel: "ANALYZE_VAR_TO_CHECKS_MSGS"
-    lifting_size: 384,
+    lifting_size: 100,
     num_cores: 2,
     var_node: 7,
     inf_prob: 0.05,

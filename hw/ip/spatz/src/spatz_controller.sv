@@ -629,6 +629,7 @@ module spatz_controller
 `endif
 
       // WAW and WAR hazards
+
       if (spatz_req.use_vd) begin
         scoreboard_d[spatz_req.id].deps[write_table_d[spatz_req.vd].id] |= write_table_d[spatz_req.vd].valid;
         scoreboard_d[spatz_req.id].deps[read_table_d[spatz_req.vd].id] |= read_table_d[spatz_req.vd].valid;

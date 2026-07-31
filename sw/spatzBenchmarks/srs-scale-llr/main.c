@@ -23,30 +23,23 @@
 #include <math.h>
 
 #include DATAHEADER
-#include "kernel/hard_decision.c"
+#include "kernel/scale_llr.c"
 
-int8_t *soft_bits;
-int8_t *hard_bits;
+int8_t *input_bits;
+int8_t *output_bits;
 
-int hard_decision_check(const int8_t *hard_bits, const int8_t *soft_bits, const uint32_t offset,
-                         const uint32_t lifting_size, bool returned_result) {
-  bool expected_no_zero = true;
+int scale_llr_check(const int8_t *output_bits, const int8_t *input_bits, const uint32_t offset,
+                         const uint32_t lifting_size) {
+  float scale_factor = 0.8f;
   for (unsigned int i = 0; i < lifting_size; ++i) {
-    int8_t soft = soft_bits[offset + i];
-    // Expected hard bit: (soft <= 0) ? 1 : 0
-    int8_t expected_hard = (soft <= 0) ? 1 : 0;
-    int8_t actual_hard   = hard_bits[offset + i];
-    if (expected_hard != actual_hard) {
-      printf("Incorrect hard_bits[%u] = %d \n", i, actual_hard);
-      printf("Correct hard_bits[%u] = %d \n", i, expected_hard);
+    int8_t input = input_bits[offset + i];
+    //int8_t expected_output = (input > 120) ? input : (int8_t)lroundf(input * scale_factor);
+    int8_t expected_output = (input > 120) ? input : (input * 205) >> 8;
+    int8_t actual_output   = output_bits[offset + i];
+    if (expected_output != actual_output) {
+      printf("Incorrect output[%u] = %d \n", i, actual_output);
+      printf("Correct output[%u] = %d \n", i, expected_output);
     }
-    if (soft == 0) {
-      expected_no_zero = false;
-    }
-  }
-  if (returned_result != expected_no_zero) {
-    printf("Incorrect return value = %d \n", returned_result);
-    printf("Correct return value = %d \n", expected_no_zero);
   }
   return 0;
 }
@@ -61,19 +54,18 @@ int main() {
 
   //Allocate arrays
   if (cid == 0) {
-    soft_bits = (int8_t *)snrt_l1alloc(num_cores * lifting_size * sizeof(int8_t));
-    hard_bits = (int8_t *)snrt_l1alloc(num_cores * lifting_size * sizeof(int8_t)); 
+    input_bits = (int8_t *)snrt_l1alloc(num_cores * lifting_size * sizeof(int8_t));
+    output_bits = (int8_t *)snrt_l1alloc(num_cores * lifting_size * sizeof(int8_t)); 
   }
 
   // Initialize the matrices
   if (cid == 0) {
-    snrt_dma_start_1d(soft_bits, hard_decision_soft_bits_dram, num_cores * lifting_size * sizeof(int8_t));
+    snrt_dma_start_1d(input_bits, input_bits_dram, num_cores * lifting_size * sizeof(int8_t));
     snrt_dma_wait_all();
   }
 
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
-  bool result;
 
   // Start dump
   if (cid == 0)
@@ -82,9 +74,9 @@ int main() {
   // Start timer
   if (cid == 0)
     timer = benchmark_get_cycle();
-  //One hard_decision per core.
+  //One llr_scaling per core.
   snrt_cluster_hw_barrier();
-  result = hard_decision(hard_bits, soft_bits, cid * lifting_size, lifting_size);
+  scale_llr(output_bits + cid * lifting_size, input_bits + cid * lifting_size, lifting_size);
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
   // End dump
@@ -98,25 +90,24 @@ int main() {
   snrt_cluster_hw_barrier();
   // Check and display results
   if (cid == 0) {
-    long unsigned int performance = 1000 * 3  * lifting_size / timer;
+    long unsigned int performance = 1000 * 3 * lifting_size / timer;
     long unsigned int utilization =
-        performance / (4 * 4  * 1);
+        performance / (4 * 4 * 1);
         // data 8bit how many can IPU process? - 4
         // (4 IPU per Spatz core)
-        // 2 * lifting_size elements, 3 instructions per element.
 
-    printf("\n----- (%d) hard_decision -----\n", lifting_size);
+    printf("\n----- (%d) scale_llr -----\n", lifting_size);
     printf("The execution took %u cycles.\n", timer);
     printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
            performance, utilization);
   }
   snrt_cluster_hw_barrier();
   if (cid == 0) {
-    hard_decision_check(hard_bits, soft_bits, 0, lifting_size, result);
+    scale_llr_check(output_bits, input_bits, 0, lifting_size);
   }
   snrt_cluster_hw_barrier();
   if (cid == 1) {
-   hard_decision_check(hard_bits, soft_bits, lifting_size, lifting_size, result);
+   scale_llr_check(output_bits, input_bits, lifting_size, lifting_size);
   }
   // Wait for core 0 to finish displaying results
   snrt_cluster_hw_barrier();

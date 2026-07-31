@@ -16,11 +16,19 @@
 
 // Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
 
-#ifndef _ANALIZEVTCMSGS_
-#define _ANALIZEVTCMSGS_
+#ifndef _COMPCHTVMSGS_
+#define _COMPCHTVMSGS_
 #include <stdbool.h>
 #include <stdint.h>
 
-inline void analyze_var_to_check_msgs(int8_t *min_var_to_check, int8_t *second_min_var_to_check, uint8_t *min_var_to_check_index, uint8_t *sign_prod_var_to_check, const int8_t *rotated_node, const uint32_t var_node, const uint32_t lifting_size)
-    __attribute__((always_inline));
+inline void compute_check_to_var_msgs(int8_t        *this_check_to_var,
+                               int8_t  const *this_var_to_check,
+                               int8_t  const *min_var_to_check_dup,
+                               int8_t  const *second_min_var_to_check_dup,
+                               uint8_t const *min_var_to_check_index_dup,
+                               uint8_t const *sign_prod_var_to_check_dup,
+                               uint32_t       shift,
+                               uint32_t       var_node,
+                               uint32_t const lifting_size)
+                                   __attribute__((always_inline));
 #endif

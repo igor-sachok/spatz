@@ -511,7 +511,7 @@ module spatz_vfu
   logic v0_t_is_ready;
   assign v0_t_is_ready   = (operand_state_q == READ_V0_t) && vrf_rvalid_i[0] && vrf_rvalid_i[1];
   logic v0_t_read_done;
-  `FFLARNC(v0_t_read_done,1'b1,v0_t_is_ready,vfu_rsp_valid_o,1'b0,clk_i,rst_ni);
+  `FFLARNC(v0_t_read_done,1'b1,v0_t_is_ready,last_request,1'b0,clk_i,rst_ni);
 
   logic switch_to_read_v0t;
   assign switch_to_read_v0t = (operand_state_q == READ_OPERANDS) && spatz_req_valid

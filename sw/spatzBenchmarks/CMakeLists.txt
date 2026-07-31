@@ -128,6 +128,9 @@ add_library(srs-fft srs-fft/kernel/srs-fft.c)
 add_library(srs-hard-decision srs-hard-decision/kernel/hard_decision.c)
 add_library(srs-compute-soft-bits srs-compute-soft-bits/kernel/compute_soft_bits.c)
 add_library(srs-compute-var-to-check-msgs srs-compute-var-to-check-msgs/kernel/compute_var_to_check_msgs.c)
+add_library(srs-compute-check-to-var-msgs srs-compute-check-to-var-msgs/kernel/compute_check_to_var_msgs.c)
+add_library(srs-analyze-var-to-check-msgs srs-analyze-var-to-check-msgs/kernel/analyze_var_to_check_msgs.c)
+add_library(srs-scale-llr srs-scale-llr/kernel/scale_llr.c)
 
 # Tests
 enable_testing()
@@ -201,10 +204,19 @@ add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 8 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 200 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 384 2)
 add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 512 2)
+add_spatz_test_twoParam(srs-hard-decision srs-hard-decision/main.c 1024 2)
 
 add_spatz_test_twoParam(srs-compute-soft-bits srs-compute-soft-bits/main.c 384 2)
+add_spatz_test_twoParam(srs-compute-soft-bits srs-compute-soft-bits/main.c 1024 2)
 add_spatz_test_twoParam(srs-compute-var-to-check-msgs srs-compute-var-to-check-msgs/main.c 384 2)
-
+add_spatz_test_twoParam(srs-compute-var-to-check-msgs srs-compute-var-to-check-msgs/main.c 1024 2)
+add_spatz_test_twoParam(srs-compute-check-to-var-msgs srs-compute-check-to-var-msgs/main.c 384 2)
+add_spatz_test_twoParam(srs-compute-check-to-var-msgs srs-compute-check-to-var-msgs/main.c 1024 2)
+add_spatz_test_twoParam(srs-analyze-var-to-check-msgs srs-analyze-var-to-check-msgs/main.c 100 2)
+add_spatz_test_twoParam(srs-analyze-var-to-check-msgs srs-analyze-var-to-check-msgs/main.c 384 2)
+add_spatz_test_twoParam(srs-analyze-var-to-check-msgs srs-analyze-var-to-check-msgs/main.c 1024 2)
+add_spatz_test_twoParam(srs-scale-llr srs-scale-llr/main.c 384 2)
+add_spatz_test_twoParam(srs-scale-llr srs-scale-llr/main.c 1024 2)
 
 # Ventaglio sparse benchmarks. The kernels carry BOTH a Ventaglio (vfx)
 # implementation and a baseline RVV reference compiled in via the

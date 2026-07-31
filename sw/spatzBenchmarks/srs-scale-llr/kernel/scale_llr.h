@@ -16,11 +16,11 @@
 
 // Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
 
-#ifndef _ANALIZEVTCMSGS_
-#define _ANALIZEVTCMSGS_
+#ifndef _SCALE_LLR_
+#define _SCALE_LLR_
 #include <stdbool.h>
 #include <stdint.h>
 
-inline void analyze_var_to_check_msgs(int8_t *min_var_to_check, int8_t *second_min_var_to_check, uint8_t *min_var_to_check_index, uint8_t *sign_prod_var_to_check, const int8_t *rotated_node, const uint32_t var_node, const uint32_t lifting_size)
+inline void scale_llr(uint8_t *out, const uint8_t *in, uint32_t lifting_size)
     __attribute__((always_inline));
 #endif

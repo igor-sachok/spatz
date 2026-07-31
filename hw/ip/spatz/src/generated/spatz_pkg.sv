@@ -17,7 +17,7 @@ package spatz_pkg;
   //////////////////
 
   // Number of IPUs in each VFU (between 1 and 8)
-  localparam int unsigned N_IPU = 1;
+  localparam int unsigned N_IPU = 4;
   // Number of FPUs in each VFU (between 1 and 8)
   localparam int unsigned N_FPU = 4;
   // Number of FUs in each VFU
@@ -118,7 +118,7 @@ package spatz_pkg;
   // Vector operations
   typedef enum logic [6:0] {
     // Arithmetic and logic instructions
-    VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR, VSADD, VSADDU,
+    VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR, VSADD, VSADDU, VSSUB, VSSUBU,
     // Shifts,
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
     // Merge and Move

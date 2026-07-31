@@ -242,7 +242,7 @@ module spatz_cluster_wrapper
   localparam int unsigned NumIntOutstandingMem     [NumCores] = '{4, 4};
   localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{4, 4};
   localparam int unsigned NumSpatzFPUs             [NumCores] = '{default: 4};
-  localparam int unsigned NumSpatzIPUs             [NumCores] = '{default: 1};
+  localparam int unsigned NumSpatzIPUs             [NumCores] = '{default: 4};
   localparam int unsigned NumSpatzTCDMPorts        [NumCores] = '{default: 4};
 
   typedef logic [IwcAxiIdOutWidth-1:0] axi_id_out_iwc_t;
