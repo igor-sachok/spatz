@@ -568,6 +568,7 @@ module spatz_vfu
 
   vlen_t vl_q_plus_nr_elem_word;
   assign vl_q_plus_nr_elem_word = vl_q + nr_elem_word;
+  logic [VLEN-1:0] operand_v0_t_q;
 
   always_comb begin: operand_proc
     reduction_operand_v0_t_lo = '0;
@@ -611,6 +612,18 @@ module spatz_vfu
                 default: operand2 = {1*N_FU{spatz_req.rs2}};
               endcase
           end
+           if (spatz_req.op == VMERGE) begin
+            automatic logic [N_FU*ELEN-1:0] mmask;
+            mmask = '0;
+            unique case (spatz_req.vtype.vsew)
+              EW_8:  for (int e = 0; e < N_FU*ELENB;   e++) mmask[e*8  +: 8]  = {8 {operand_v0_t_q[vl_q + e]}};
+              EW_16: for (int e = 0; e < N_FU*ELENB/2; e++) mmask[e*16 +: 16] = {16{operand_v0_t_q[vl_q + e]}};
+              EW_32: for (int e = 0; e < N_FU*ELENB/4; e++) mmask[e*32 +: 32] = {32{operand_v0_t_q[vl_q + e]}};
+              default: if (MAXEW == EW_64)
+                     for (int e = 0; e < N_FU*ELENB/8; e++) mmask[e*64 +: 64] = {64{operand_v0_t_q[vl_q + e]}};
+            endcase
+            operand1 = (operand1 & mmask) | (operand2 & ~mmask);
+          end
       end
       READ_V0_t: begin
         operand_v0_t_lo = vrf_rdata_i[0];
@@ -630,7 +643,6 @@ module spatz_vfu
   `FFL(operand_v0_t_lo_q, operand_v0_t_lo, v0_t_is_ready, '0)
   `FFL(operand_v0_t_hi_q, operand_v0_t_hi, v0_t_is_ready, '0)
 
-  logic [VLEN-1:0] operand_v0_t_q;
   assign operand_v0_t_q = {operand_v0_t_hi_q,operand_v0_t_lo_q};
 
   ///////////////////////
