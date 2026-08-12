@@ -56,6 +56,8 @@ int test_case;
   do {                                                                         \
     asm volatile("csrr %[BUF], vl" : [BUF] "=r"(buf));                         \
   } while (0);
+#define read_vxsat(buf) do { asm volatile ("csrr %[BUF], vxsat" : [BUF] "=r" (buf)); } while (0);
+#define reset_vxsat     do { asm volatile ("csrw vxsat, %0" :: "rK"(0)); } while (0);
 
 #define vtype(golden_vtype, vlmul, vsew, vta, vma)                             \
   (golden_vtype = vlmul << 0 | vsew << 3 | vta << 6 | vma << 7)
@@ -70,6 +72,20 @@ int test_case;
     return;                                                                    \
   }                                                                            \
   printf("PASSED.\n");
+
+#define check_vxsat(casenum, vxsat, golden_vxsat)                                                                  \
+  printf("Checking vxsat #%d...\n", casenum);                                                               \
+  if (vxsat != golden_vxsat) {                                                                        \
+    printf("FAILED. Got vxsat = %lx, expected vxsat = %lx.\n", vxsat, golden_vxsat); \
+    num_failed++;                                                                                                  \
+    return;                                                                                                        \
+  }                                                                                                                \
+  printf("PASSED.\n");  
+
+// In order to avoid that scalar loads run ahead of vector stores,
+// we use an instruction to ensure that all vector stores have been
+// committed before continuing with scalar memory operations.
+#define MEMORY_BARRIER // asm volatile ("fence");
 
 // Zero-initialized variables can be problematic on bare-metal.
 // Therefore, initialize them during runtime.
@@ -247,6 +263,18 @@ do {                                                                           \
     asm volatile(                                                              \
         "vsetvl zero, %[vl], %[vtype]" ::[vl] "r"(vl), [vtype] "r"(vtype));    \
   } while (0)
+
+#define VCLEAR_AT_ONE(register)                                                                   \
+  do {                                                                                            \
+    MEMORY_BARRIER;                                                                               \
+    uint64_t vtype; uint64_t vl; uint64_t vlmax;                                                  \
+    asm volatile("csrr %[vtype], vtype" : [vtype] "=r" (vtype));                                  \
+    asm volatile("csrr %[vl], vl" : [vl] "=r" (vl));                                              \
+    asm volatile("vsetvl %[vlmax], zero, %[vtype]" : [vlmax] "=r" (vlmax) : [vtype] "r" (vtype)); \
+    asm volatile("vmv.v.i "#register", -1");                                                       \
+    asm volatile("vsetvl zero, %[vl], %[vtype]" :: [vl] "r" (vl), [vtype] "r" (vtype));           \
+  } while(0)
+
 
 // Macro to initialize a vector with progressive values from a counter
 #define INIT_MEM_CNT(vec_name, size)                                           \
