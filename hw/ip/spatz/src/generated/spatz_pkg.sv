@@ -176,6 +176,7 @@ package spatz_pkg;
     logic write_vstart;
     logic set_vstart;
     logic clear_vstart;
+    logic write_vxsat;
     logic reset_vstart;
     // Ventaglio (VTL) CSR control flags. Decoded from the vcsr immediates
     // 0x7c3..0x7c6; consumed in the controller's proc_vcsr block.

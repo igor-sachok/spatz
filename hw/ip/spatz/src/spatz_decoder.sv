@@ -2084,6 +2084,11 @@ module spatz_decoder
                 spatz_req.use_rd              = csr_rd != '0;
                 spatz_req.op_cfg.set_vtl_ratio = 1'b1;
               end
+              
+              if (csr_addr == riscv_instr::CSR_VXSAT) begin
+                spatz_req.use_rd             = csr_rd != '0;
+                spatz_req.op_cfg.write_vxsat = 1'b1;
+              end
 
             end
 
